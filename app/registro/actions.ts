@@ -2,6 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { Resend } from 'resend'
 
 function fail(msg: string): never {
   redirect(`/registro?error=${encodeURIComponent(msg)}`)
@@ -39,6 +40,16 @@ export async function signUp(formData: FormData) {
   // Supabase retorna identities vazio quando o e-mail já existe e confirmação está ativada
   if (data.user?.identities?.length === 0) {
     redirect(`/registro?error=${encodeURIComponent('Este e-mail já está cadastrado.')}`)
+  }
+
+  if (process.env.RESEND_API_KEY) {
+    const resend = new Resend(process.env.RESEND_API_KEY)
+    await resend.emails.send({
+      from: 'Tênis de Mesa <onboarding@resend.dev>',
+      to: 'cng.tcharlles@gmail.com',
+      subject: 'Novo cadastro no app',
+      html: `<p><strong>${name}</strong> (${email}) acabou de criar uma conta.</p>`,
+    })
   }
 
   redirect('/registro?success=1')
