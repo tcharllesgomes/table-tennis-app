@@ -86,10 +86,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Brackets por posição dentro da categoria (usando bracket_rank relativo à categoria)
-      // Para categorias usamos category_id em vez de bracket_rank para identificar o bracket
-      // O bracket_rank ainda indica posição no grupo (1º, 2º, etc.) mas com category_id
-      for (let rank = 1; rank <= cat.players_per_group; rank++) {
+      const maxGroupSize = Math.max(...Array.from(groupStandings.values()).map((s) => s.length))
+      for (let rank = 1; rank <= maxGroupSize; rank++) {
         const bracketAthletes: string[] = []
         const sortedGroups = Array.from(groupStandings.keys()).sort((a, b) => a - b)
         for (const g of sortedGroups) {
@@ -133,7 +131,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    for (let rank = 1; rank <= tournament.players_per_group; rank++) {
+    const maxGroupSize = Math.max(...Array.from(groupStandings.values()).map((s) => s.length))
+    for (let rank = 1; rank <= maxGroupSize; rank++) {
       const bracketAthletes: string[] = []
       const sortedGroups = Array.from(groupStandings.keys()).sort((a, b) => a - b)
       for (const g of sortedGroups) {

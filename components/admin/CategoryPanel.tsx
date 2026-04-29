@@ -13,6 +13,7 @@ import { KnockoutBracket } from '@/components/tournament/KnockoutBracket'
 import { ScoreModal } from '@/components/admin/ScoreModal'
 import { useToast } from '@/components/ui/use-toast'
 import { calculateGroupStandings, getGroupLabel, getBracketRankLabel } from '@/lib/utils'
+import { GroupConfigurator } from '@/components/admin/GroupConfigurator'
 import { Plus, Pencil, Trash2, UserPlus, Shuffle, ChevronDown, ChevronRight, Swords } from 'lucide-react'
 
 interface CategoryPanelProps {
@@ -43,6 +44,7 @@ export function CategoryPanel({
   const [selectedAthlete, setSelectedAthlete] = useState<Record<string, string>>({})
   const [selectedGroup, setSelectedGroup] = useState<Record<string, string>>({})
   const [scoreModal, setScoreModal] = useState<{ match: any; type: 'group' | 'knockout' } | null>(null)
+  const [configuratorCat, setConfiguratorCat] = useState<string | null>(null)
 
   const isDraft = tournamentStatus === 'draft'
 
@@ -123,15 +125,26 @@ export function CategoryPanel({
     onRefresh()
   }
 
-  async function shuffleGroups(cat: TournamentCategory & { athletes: (CategoryAthlete & { athlete: Athlete })[] }) {
-    if (cat.athletes.length === 0) { toast({ title: 'Nenhum atleta', variant: 'destructive' }); return }
-    if (!confirm('Sortear sobrescreverá os grupos atuais. Continuar?')) return
+  async function shuffleGroups(
+    cat: TournamentCategory & { athletes: (CategoryAthlete & { athlete: Athlete })[] },
+    sizes: number[]
+  ) {
     const shuffled = [...cat.athletes].sort(() => Math.random() - 0.5)
-    await Promise.all(shuffled.map((ca, i) =>
+    const assignments: { athlete_id: string; group_number: number }[] = []
+    let idx = 0
+    for (let g = 0; g < sizes.length; g++) {
+      for (let i = 0; i < sizes[g]; i++) {
+        if (idx < shuffled.length) {
+          assignments.push({ athlete_id: shuffled[idx].athlete_id, group_number: g + 1 })
+          idx++
+        }
+      }
+    }
+    await Promise.all(assignments.map(({ athlete_id, group_number }) =>
       fetch(`/api/admin/categories/${cat.id}/athletes`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ athlete_id: ca.athlete_id, group_number: (i % cat.groups_count) + 1 }),
+        body: JSON.stringify({ athlete_id, group_number }),
       })
     ))
     toast({ title: 'Atletas sorteados!', variant: 'success' })
@@ -193,7 +206,15 @@ export function CategoryPanel({
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5"><UserPlus className="h-3.5 w-3.5" /> Atletas</p>
-                      <Button size="sm" variant="accent" onClick={() => shuffleGroups(cat)} disabled={cat.athletes.length === 0} className="h-7 text-xs">
+                      <Button
+                        size="sm"
+                        variant="accent"
+                        onClick={() => {
+                          if (cat.athletes.length === 0) { toast({ title: 'Nenhum atleta', variant: 'destructive' }); return }
+                          setConfiguratorCat(cat.id)
+                        }}
+                        className="h-7 text-xs"
+                      >
                         <Shuffle className="h-3.5 w-3.5 mr-1" /> Sortear
                       </Button>
                     </div>
@@ -258,7 +279,7 @@ export function CategoryPanel({
                         <div key={g} className="rounded-lg border border-slate-200 overflow-hidden">
                           <div className="bg-navy-600 px-3 py-1.5">
                             <span className="text-white font-bold text-xs">Grupo {getGroupLabel(g)}</span>
-                            <span className="text-white/60 text-xs ml-1.5">({gAthletes.length}/{cat.players_per_group})</span>
+                            <span className="text-white/60 text-xs ml-1.5">({gAthletes.length})</span>
                           </div>
                           {gAthletes.length === 0 && <p className="px-3 py-2 text-xs text-slate-400 italic">Vazio</p>}
                           {gAthletes.map((ca) => (
@@ -375,6 +396,19 @@ export function CategoryPanel({
           onClose={() => setScoreModal(null)}
           onSaved={onRefresh}
         />
+      )}
+
+      {categories.map((cat) =>
+        configuratorCat === cat.id ? (
+          <GroupConfigurator
+            key={cat.id}
+            athleteCount={cat.athletes.length}
+            groupCount={cat.groups_count}
+            open={true}
+            onCancel={() => setConfiguratorCat(null)}
+            onConfirm={(sizes) => { setConfiguratorCat(null); shuffleGroups(cat, sizes) }}
+          />
+        ) : null
       )}
     </div>
   )

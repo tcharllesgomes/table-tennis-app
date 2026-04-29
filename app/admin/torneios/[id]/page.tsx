@@ -9,6 +9,7 @@ import { GroupStandings } from '@/components/tournament/GroupStandings'
 import { KnockoutBracket } from '@/components/tournament/KnockoutBracket'
 import { ScoreModal } from '@/components/admin/ScoreModal'
 import { CategoryPanel } from '@/components/admin/CategoryPanel'
+import { GroupConfigurator } from '@/components/admin/GroupConfigurator'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -39,6 +40,7 @@ export default function AdminTournamentPage() {
   const [scoreModal, setScoreModal] = useState<{ match: any; type: 'group' | 'knockout' } | null>(null)
   const [selectedAthlete, setSelectedAthlete] = useState('')
   const [selectedGroup, setSelectedGroup] = useState('none')
+  const [configuratorOpen, setConfiguratorOpen] = useState(false)
 
   const supabase = createClient()
 
@@ -108,28 +110,29 @@ export default function AdminTournamentPage() {
     fetchData()
   }
 
-  async function shuffleGroups() {
-    if (tournamentAthletes.length === 0) {
-      toast({ title: 'Nenhum atleta inscrito', variant: 'destructive' })
-      return
-    }
-    if (!confirm('Sortear sobrescreverá os grupos atuais. Continuar?')) return
-
+  async function shuffleGroups(sizes: number[]) {
     setActionLoading(true)
     const shuffled = [...tournamentAthletes]
       .map((ta) => ({ ta, sort: Math.random() }))
       .sort((a, b) => a.sort - b.sort)
       .map(({ ta }) => ta)
 
-    const groupCount = tournament!.groups_count
-    const updates = shuffled.map((ta, i) =>
-      supabase
-        .from('tournament_athletes')
-        .update({ group_number: (i % groupCount) + 1 })
-        .eq('id', ta.id)
-    )
+    const assignments: { id: string; group_number: number }[] = []
+    let idx = 0
+    for (let g = 0; g < sizes.length; g++) {
+      for (let i = 0; i < sizes[g]; i++) {
+        if (idx < shuffled.length) {
+          assignments.push({ id: shuffled[idx].id, group_number: g + 1 })
+          idx++
+        }
+      }
+    }
 
-    const results = await Promise.all(updates)
+    const results = await Promise.all(
+      assignments.map(({ id, group_number }) =>
+        supabase.from('tournament_athletes').update({ group_number }).eq('id', id)
+      )
+    )
     const firstError = results.find((r) => r.error)?.error
     if (firstError) toast({ title: 'Erro', description: firstError.message, variant: 'destructive' })
     else { toast({ title: 'Atletas sorteados!', variant: 'success' }); fetchData() }
@@ -275,8 +278,14 @@ export default function AdminTournamentPage() {
                       <UserPlus className="h-4 w-4" /> Adicionar Atleta
                     </h3>
                     <Button
-                      onClick={shuffleGroups}
-                      disabled={actionLoading || tournamentAthletes.length === 0}
+                      onClick={() => {
+                        if (tournamentAthletes.length === 0) {
+                          toast({ title: 'Nenhum atleta inscrito', variant: 'destructive' })
+                          return
+                        }
+                        setConfiguratorOpen(true)
+                      }}
+                      disabled={actionLoading}
                       size="sm"
                       variant="accent"
                     >
@@ -368,7 +377,7 @@ export default function AdminTournamentPage() {
                     <div key={g} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                       <div className="bg-navy-600 px-4 py-2">
                         <span className="text-white font-bold text-sm">Grupo {getGroupLabel(g)}</span>
-                        <span className="text-white/60 text-xs ml-2">({athletes.length}/{tournament.players_per_group})</span>
+                        <span className="text-white/60 text-xs ml-2">({athletes.length})</span>
                       </div>
                       {athletes.map((ta) => (
                         <div key={ta.id} className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 last:border-0">
@@ -486,6 +495,14 @@ export default function AdminTournamentPage() {
               onSaved={fetchData}
             />
           )}
+
+          <GroupConfigurator
+            athleteCount={tournamentAthletes.length}
+            groupCount={tournament.groups_count}
+            open={configuratorOpen}
+            onCancel={() => setConfiguratorOpen(false)}
+            onConfirm={(sizes) => { setConfiguratorOpen(false); shuffleGroups(sizes) }}
+          />
         </>
       )}
     </div>
