@@ -65,10 +65,10 @@ export function MatchCard({ match, onEdit, compact = false }: MatchCardProps) {
       className={cn(
         'rounded-lg border bg-white shadow-sm transition-all',
         'border-slate-200',
-        onEdit && !isFinished && 'cursor-pointer hover:border-navy-400 hover:shadow-md',
+        onEdit && 'cursor-pointer hover:border-navy-400 hover:shadow-md',
         compact ? 'min-w-[180px]' : 'min-w-[220px]'
       )}
-      onClick={onEdit && !isFinished ? onEdit : undefined}
+      onClick={onEdit ?? undefined}
     >
       <div className={cn(
         'h-1 rounded-t-lg',
