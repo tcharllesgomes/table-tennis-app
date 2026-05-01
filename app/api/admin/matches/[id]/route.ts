@@ -36,6 +36,20 @@ export async function PATCH(
     .single()
   if (!match) return NextResponse.json({ error: 'Partida não encontrada' }, { status: 404 })
 
+  const { data: tournament } = await supabase
+    .from('tournaments')
+    .select('status')
+    .eq('id', match.tournament_id)
+    .single()
+  if (!tournament) return NextResponse.json({ error: 'Torneio não encontrado' }, { status: 404 })
+
+  if (type === 'group' && tournament.status !== 'group_stage') {
+    return NextResponse.json(
+      { error: 'Partidas da fase de grupos não podem ser editadas após o início do mata-mata' },
+      { status: 403 }
+    )
+  }
+
   let athlete1_sets: number
   let athlete2_sets: number
   let winnerId: string | null
