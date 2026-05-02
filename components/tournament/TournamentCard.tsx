@@ -3,6 +3,7 @@ import { Tournament } from '@/lib/supabase/types'
 import { Badge } from '@/components/ui/badge'
 import { getStatusLabel, formatDate } from '@/lib/utils'
 import { Calendar, ChevronRight, Trophy } from 'lucide-react'
+import { ShareButton } from '@/components/tournament/ShareButton'
 
 interface TournamentCardProps {
   tournament: Tournament
@@ -37,7 +38,14 @@ export function TournamentCard({ tournament, featured = false }: TournamentCardP
               </h3>
               <p className="text-sm text-slate-500 mt-0.5">{tournament.edition}ª Edição</p>
             </div>
-            <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-navy-600 transition-colors shrink-0 mt-1" />
+            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+              <ShareButton
+                title={tournament.name}
+                url={`/torneio/${tournament.id}`}
+                variant="icon"
+              />
+              <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-navy-600 transition-colors" />
+            </div>
           </div>
 
           {tournament.description && (

@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { getStatusLabel, formatDate, getBracketRankLabel } from '@/lib/utils'
 import { Calendar, Users, Swords, Trophy, ChevronRight } from 'lucide-react'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
+import { ShareButton } from '@/components/tournament/ShareButton'
 
 export default async function TournamentPage({ params }: { params: { id: string } }) {
   const supabase = createClient()
@@ -68,16 +69,22 @@ export default async function TournamentPage({ params }: { params: { id: string 
           </Badge>
         </div>
 
-        <div className="flex flex-wrap gap-4 mt-6 text-sm text-white/70">
-          <span className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4" />
-            {formatDate(tournament.start_date)}
-            {tournament.end_date && ` — ${formatDate(tournament.end_date)}`}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Users className="h-4 w-4" />
-            {tournament.groups_count} grupos · {tournament.players_per_group} por grupo
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-4 mt-6">
+          <div className="flex flex-wrap gap-4 text-sm text-white/70">
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4" />
+              {formatDate(tournament.start_date)}
+              {tournament.end_date && ` — ${formatDate(tournament.end_date)}`}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Users className="h-4 w-4" />
+              {tournament.groups_count} grupos · {tournament.players_per_group} por grupo
+            </span>
+          </div>
+          <ShareButton
+            title={tournament.name}
+            url={`/torneio/${tournament.id}`}
+          />
         </div>
       </div>
 
