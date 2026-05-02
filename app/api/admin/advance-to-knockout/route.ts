@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   if (tournament.type === 'categories') {
     const { data: categories } = await supabase
       .from('tournament_categories')
-      .select('id, players_per_group')
+      .select('id, players_per_group, groups_count')
       .eq('tournament_id', tournamentId)
 
     if (!categories) return NextResponse.json({ error: 'Erro ao buscar categorias' }, { status: 500 })
@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
 
       for (const [groupNum, athletes] of groups) {
         const matches = catMatches.filter((m) => m.group_number === groupNum)
-        // calculateGroupStandings expects TournamentAthlete shape — adapt CategoryAthlete
         const adapted = athletes.map((ca) => ({
           ...ca,
           athlete_id: ca.athlete_id,
@@ -84,6 +83,17 @@ export async function POST(request: NextRequest) {
             .eq('category_id', cat.id)
             .eq('athlete_id', standings[i].athlete.id)
         }
+      }
+
+      // Grupo único: top 4 vão direto para as semi-finais em um único bracket
+      if (cat.groups_count === 1) {
+        const singleGroupStandings = groupStandings.get(1) ?? []
+        const top4 = singleGroupStandings.slice(0, 4)
+        if (top4.length >= 2) {
+          const bracketMatches = generateBracketMatches(tournamentId, 1, top4)
+          allBracketMatches.push(...bracketMatches.map((m) => ({ ...m, category_id: cat.id })))
+        }
+        continue
       }
 
       const maxGroupSize = Math.max(...Array.from(groupStandings.values()).map((s) => s.length))
