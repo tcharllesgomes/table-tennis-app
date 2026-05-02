@@ -14,7 +14,7 @@ import { ScoreModal } from '@/components/admin/ScoreModal'
 import { useToast } from '@/components/ui/use-toast'
 import { calculateGroupStandings, getGroupLabel, getBracketRankLabel } from '@/lib/utils'
 import { GroupConfigurator } from '@/components/admin/GroupConfigurator'
-import { Plus, Pencil, Trash2, UserPlus, Shuffle, ChevronDown, ChevronRight, Swords } from 'lucide-react'
+import { Plus, Pencil, Trash2, UserPlus, Shuffle, ChevronDown, ChevronRight, Swords, Play } from 'lucide-react'
 
 interface CategoryPanelProps {
   tournamentId: string
@@ -47,6 +47,20 @@ export function CategoryPanel({
   const [configuratorCat, setConfiguratorCat] = useState<string | null>(null)
 
   const isDraft = tournamentStatus === 'draft'
+
+  async function startCategoryGroup(catId: string) {
+    const res = await fetch(`/api/admin/categories/${catId}/start-group`, { method: 'POST' })
+    const d = await res.json()
+    if (!res.ok) toast({ title: 'Erro', description: d.error, variant: 'destructive' })
+    else { toast({ title: 'Fase de grupos iniciada!', variant: 'success' }); onRefresh() }
+  }
+
+  async function advanceCategoryToKnockout(catId: string) {
+    const res = await fetch(`/api/admin/categories/${catId}/advance-to-knockout`, { method: 'POST' })
+    const d = await res.json()
+    if (!res.ok) toast({ title: 'Erro', description: d.error, variant: 'destructive' })
+    else { toast({ title: 'Mata-mata gerado!', variant: 'success' }); onRefresh() }
+  }
 
   function openNewCat() {
     setEditingCat(null)
@@ -153,13 +167,11 @@ export function CategoryPanel({
 
   return (
     <div className="space-y-3">
-      {isDraft && (
-        <div className="flex justify-end">
-          <Button onClick={openNewCat} size="sm">
-            <Plus className="h-4 w-4 mr-1" /> Nova Categoria
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-end">
+        <Button onClick={openNewCat} size="sm">
+          <Plus className="h-4 w-4 mr-1" /> Nova Categoria
+        </Button>
+      </div>
 
       {categories.length === 0 && (
         <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-300">
@@ -174,6 +186,11 @@ export function CategoryPanel({
         const available = allAthletes.filter((a) => !registeredIds.has(a.id))
         const unassigned = cat.athletes.filter((a) => a.group_number == null)
         const bracketRanks = Array.from(new Set(cat.knockoutMatches.map((m) => m.bracket_rank))).sort()
+        const catNotStarted = cat.groupMatches.length === 0
+        const catPending = cat.groupMatches.filter((m) => m.status === 'pending').length
+        const catGroupDone = cat.groupMatches.length > 0 && catPending === 0
+        const catHasKnockout = cat.knockoutMatches.length > 0
+        const athletesAssigned = cat.athletes.filter((a) => a.group_number != null).length
 
         return (
           <div key={cat.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -187,7 +204,7 @@ export function CategoryPanel({
                 <span className="font-semibold text-slate-900">{cat.name}</span>
                 <span className="text-xs text-slate-400">{cat.athletes.length} atleta{cat.athletes.length !== 1 ? 's' : ''} · {cat.groups_count} grupo{cat.groups_count !== 1 ? 's' : ''}</span>
               </div>
-              {isDraft && (
+              {catNotStarted && (
                 <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                   <button onClick={() => openEditCat(cat)} className="p-1.5 text-slate-400 hover:text-navy-600 transition-colors rounded">
                     <Pencil className="h-3.5 w-3.5" />
@@ -201,8 +218,24 @@ export function CategoryPanel({
 
             {isExpanded && (
               <div className="border-t border-slate-100 px-4 py-4 space-y-5">
+                {/* Botões de ação por categoria */}
+                {catNotStarted && athletesAssigned >= 2 && (
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={() => startCategoryGroup(cat.id)}>
+                      <Play className="h-3.5 w-3.5 mr-1" /> Iniciar Grupos
+                    </Button>
+                  </div>
+                )}
+                {catGroupDone && !catHasKnockout && (
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={() => advanceCategoryToKnockout(cat.id)}>
+                      <Swords className="h-3.5 w-3.5 mr-1" /> Gerar Mata-Mata
+                    </Button>
+                  </div>
+                )}
+
                 {/* Adicionar atleta */}
-                {isDraft && (
+                {catNotStarted && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5"><UserPlus className="h-3.5 w-3.5" /> Atletas</p>
@@ -256,7 +289,7 @@ export function CategoryPanel({
                           <div key={ca.id} className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
                             <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700">{ca.athlete.name.slice(0, 2).toUpperCase()}</div>
                             <span className="text-sm flex-1 truncate">{ca.athlete.name}</span>
-                            {isDraft && (
+                            {catNotStarted && (
                               <>
                                 <Select value="none" onValueChange={(v) => updateGroup(cat.id, ca.athlete_id, v)}>
                                   <SelectTrigger className="w-28 h-6 text-xs"><SelectValue /></SelectTrigger>
@@ -286,7 +319,7 @@ export function CategoryPanel({
                             <div key={ca.id} className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 last:border-0">
                               <div className="h-6 w-6 rounded-full bg-navy-100 flex items-center justify-center text-xs font-bold text-navy-600">{ca.athlete.name.slice(0, 2).toUpperCase()}</div>
                               <span className="text-sm flex-1 truncate">{ca.athlete.name}</span>
-                              {isDraft && (
+                              {catNotStarted && (
                                 <>
                                   <Select value={g.toString()} onValueChange={(v) => updateGroup(cat.id, ca.athlete_id, v)}>
                                     <SelectTrigger className="w-28 h-6 text-xs"><SelectValue /></SelectTrigger>
@@ -325,7 +358,7 @@ export function CategoryPanel({
                                 <MatchCard
                                   key={m.id}
                                   match={m}
-                                  onEdit={tournamentStatus === 'group_stage' ? () => setScoreModal({ match: m, type: 'group' }) : undefined}
+                                  onEdit={!catHasKnockout ? () => setScoreModal({ match: m, type: 'group' }) : undefined}
                                 />
                               ))}
                             </div>
@@ -346,7 +379,7 @@ export function CategoryPanel({
                         <div className="bg-slate-50 rounded-lg p-3 overflow-x-auto">
                           <KnockoutBracket
                             matches={cat.knockoutMatches.filter((m) => m.bracket_rank === rank)}
-                            onEditMatch={tournamentStatus === 'knockout_stage' ? (m) => setScoreModal({ match: m, type: 'knockout' }) : undefined}
+                            onEditMatch={(m) => setScoreModal({ match: m, type: 'knockout' })}
                           />
                         </div>
                       </div>

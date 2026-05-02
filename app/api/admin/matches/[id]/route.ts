@@ -43,11 +43,26 @@ export async function PATCH(
     .single()
   if (!tournament) return NextResponse.json({ error: 'Torneio não encontrado' }, { status: 404 })
 
-  if (type === 'group' && tournament.status !== 'group_stage') {
-    return NextResponse.json(
-      { error: 'Partidas da fase de grupos não podem ser editadas após o início do mata-mata' },
-      { status: 403 }
-    )
+  if (type === 'group') {
+    // Para partidas de categoria: bloqueia se já existe mata-mata gerado para aquela categoria
+    if (match.category_id) {
+      const { count } = await supabase
+        .from('knockout_matches')
+        .select('id', { count: 'exact', head: true })
+        .eq('category_id', match.category_id)
+      if (count && count > 0) {
+        return NextResponse.json(
+          { error: 'Partidas da fase de grupos não podem ser editadas após o início do mata-mata' },
+          { status: 403 }
+        )
+      }
+    } else if (tournament.status !== 'group_stage') {
+      // Para torneios clássicos: bloqueia quando o torneio já avançou
+      return NextResponse.json(
+        { error: 'Partidas da fase de grupos não podem ser editadas após o início do mata-mata' },
+        { status: 403 }
+      )
+    }
   }
 
   let athlete1_sets: number
