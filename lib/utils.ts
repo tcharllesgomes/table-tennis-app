@@ -49,13 +49,52 @@ export function calculateGroupStandings(
     setDiff: s.setsWon - s.setsLost,
   }))
 
-  standings.sort((a, b) => {
-    if (b.wins !== a.wins) return b.wins - a.wins
-    if (b.setDiff !== a.setDiff) return b.setDiff - a.setDiff
-    return b.setsWon - a.setsWon
-  })
+  // Se todos têm group_rank salvo no banco, respeita essa ordem (pós-advance ou override manual)
+  const allHaveRank = tournamentAthletes.every((ta) => ta.group_rank != null)
+  if (allHaveRank) {
+    const rankMap = new Map(tournamentAthletes.map((ta) => [ta.athlete_id, ta.group_rank as number]))
+    standings.sort((a, b) => (rankMap.get(a.athlete.id) ?? 999) - (rankMap.get(b.athlete.id) ?? 999))
+    return standings.map((s, i) => ({ ...s, rank: i + 1 }))
+  }
 
-  return standings.map((s, i) => ({ ...s, rank: i + 1 }))
+  // Critério de desempate em grupos com empate de vitórias: confronto direto
+  const byWins = new Map<number, GroupStanding[]>()
+  for (const s of standings) {
+    const bucket = byWins.get(s.wins) ?? []
+    bucket.push(s)
+    byWins.set(s.wins, bucket)
+  }
+
+  const h2hWins = (group: GroupStanding[]): Map<string, number> => {
+    const tiedIds = new Set(group.map((s) => s.athlete.id))
+    const wins = new Map(group.map((s) => [s.athlete.id, 0]))
+    for (const match of matches) {
+      if (match.status === 'pending' || !match.winner_id) continue
+      if (tiedIds.has(match.athlete1_id) && tiedIds.has(match.athlete2_id)) {
+        wins.set(match.winner_id, (wins.get(match.winner_id) ?? 0) + 1)
+      }
+    }
+    return wins
+  }
+
+  const sorted: GroupStanding[] = []
+  for (const wins of Array.from(byWins.keys()).sort((a, b) => b - a)) {
+    const group = byWins.get(wins)!
+    if (group.length === 1) {
+      sorted.push(group[0])
+    } else {
+      const h2h = h2hWins(group)
+      group.sort((a, b) => {
+        const h2hDiff = (h2h.get(b.athlete.id) ?? 0) - (h2h.get(a.athlete.id) ?? 0)
+        if (h2hDiff !== 0) return h2hDiff
+        if (b.setDiff !== a.setDiff) return b.setDiff - a.setDiff
+        return b.setsWon - a.setsWon
+      })
+      sorted.push(...group)
+    }
+  }
+
+  return sorted.map((s, i) => ({ ...s, rank: i + 1 }))
 }
 
 export function getRoundName(round: number, totalRounds: number): string {
