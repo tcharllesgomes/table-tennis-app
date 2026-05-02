@@ -25,10 +25,11 @@ export default async function TournamentPage({ params }: { params: { id: string 
     .eq('tournament_id', params.id)
 
   const bracketRanks = Array.from(new Set(knockoutBrackets?.map((k) => k.bracket_rank) ?? [])).sort()
+  const hasKnockout = bracketRanks.length > 0
 
-  // Busca campeão (vencedor da final do bracket 1)
+  // Busca campeão (vencedor da final do bracket 1) — apenas para torneios clássicos
   let champion = null
-  if (tournament.status === 'knockout_stage' || tournament.status === 'finished') {
+  if (tournament.type !== 'categories' && (tournament.status === 'knockout_stage' || tournament.status === 'finished')) {
     const { data: finalMatch } = await supabase
       .from('knockout_matches')
       .select('winner_id, athlete1:athletes!knockout_matches_athlete1_id_fkey(*), athlete2:athletes!knockout_matches_athlete2_id_fkey(*)')
@@ -126,8 +127,29 @@ export default async function TournamentPage({ params }: { params: { id: string 
           </div>
         </Link>
 
-        {/* Mata-Mata */}
-        {bracketRanks.length > 0 && (
+        {/* Mata-Mata — categorias: link único para página consolidada */}
+        {tournament.type === 'categories' && hasKnockout && (
+          <Link
+            href={`/torneio/${tournament.id}/mata-mata`}
+            className="group bg-white rounded-xl border border-slate-200 p-5 hover:border-orange-400 hover:shadow-md transition-all"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-orange-500 rounded-lg flex items-center justify-center">
+                  <Swords className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-slate-900">Mata-Mata</h2>
+                  <p className="text-sm text-slate-500">Ver chaves por categoria</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-orange-500 transition-colors" />
+            </div>
+          </Link>
+        )}
+
+        {/* Mata-Mata — clássico: links por bracket rank */}
+        {tournament.type !== 'categories' && hasKnockout && (
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="h-10 w-10 bg-orange-500 rounded-lg flex items-center justify-center">
@@ -153,11 +175,11 @@ export default async function TournamentPage({ params }: { params: { id: string 
           </div>
         )}
 
-        {tournament.status === 'draft' || (tournament.status === 'group_stage' && bracketRanks.length === 0) ? (
+        {!hasKnockout && (tournament.status === 'draft' || tournament.status === 'group_stage') && (
           <div className="bg-slate-50 rounded-xl border border-dashed border-slate-300 p-5 flex items-center justify-center text-slate-400 text-sm">
             Mata-mata disponível após a fase de grupos
           </div>
-        ) : null}
+        )}
       </div>
     </div>
   )
