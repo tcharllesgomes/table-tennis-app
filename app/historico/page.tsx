@@ -7,10 +7,7 @@ export default async function HistoricoPage() {
   const { data: tournaments } = await supabase
     .from('tournaments')
     .select('*')
-    .order('edition', { ascending: false })
-
-  const current = tournaments?.find((t) => t.is_current)
-  const past = tournaments?.filter((t) => !t.is_current) ?? []
+    .order('created_at', { ascending: false })
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -19,29 +16,17 @@ export default async function HistoricoPage() {
         <h1 className="text-2xl font-bold text-slate-900">Histórico de Campeonatos</h1>
       </div>
 
-      {current && (
-        <section className="mb-8">
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Atual</h2>
-          <TournamentCard tournament={current} featured />
-        </section>
-      )}
-
-      {past.length > 0 ? (
-        <section>
-          <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Edições Anteriores</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {past.map((t) => (
-              <TournamentCard key={t.id} tournament={t} />
-            ))}
-          </div>
-        </section>
+      {tournaments && tournaments.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tournaments.map((t, i) => (
+            <TournamentCard key={t.id} tournament={t} featured={i === 0} />
+          ))}
+        </div>
       ) : (
-        !current && (
-          <div className="text-center py-16 text-slate-500">
-            <History className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p>Nenhum campeonato registrado ainda.</p>
-          </div>
-        )
+        <div className="text-center py-16 text-slate-500">
+          <History className="h-10 w-10 mx-auto mb-3 opacity-40" />
+          <p>Nenhum campeonato registrado ainda.</p>
+        </div>
       )}
     </div>
   )

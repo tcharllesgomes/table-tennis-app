@@ -25,7 +25,7 @@ export function TournamentCard({ tournament, featured = false }: TournamentCardP
         {featured && (
           <div className="bg-navy-600 rounded-t-xl px-4 py-2 flex items-center gap-2">
             <Trophy className="h-4 w-4 text-orange-400" />
-            <span className="text-white text-xs font-semibold uppercase tracking-wide">Campeonato Atual</span>
+            <span className="text-white text-xs font-semibold uppercase tracking-wide">Mais Recente</span>
           </div>
         )}
 

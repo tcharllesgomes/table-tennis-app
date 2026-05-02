@@ -16,7 +16,7 @@ export default async function AdminTorneiosPage() {
   const { data: tournaments } = await supabase
     .from('tournaments')
     .select('*')
-    .order('edition', { ascending: false })
+    .order('created_at', { ascending: false })
 
   return (
     <div>
@@ -32,20 +32,20 @@ export default async function AdminTorneiosPage() {
 
       {tournaments && tournaments.length > 0 ? (
         <div className="space-y-3">
-          {tournaments.map((t) => (
+          {tournaments.map((t, i) => (
             <Link key={t.id} href={`/admin/torneios/${t.id}`}>
               <div className="bg-white rounded-xl border border-slate-200 p-4 hover:border-navy-400 hover:shadow-sm transition-all flex items-center justify-between group">
                 <div className="flex items-center gap-3">
                   <div className={`h-9 w-9 rounded-lg flex items-center justify-center shrink-0 ${
-                    t.is_current ? 'bg-navy-600' : 'bg-slate-100'
+                    i === 0 ? 'bg-navy-600' : 'bg-slate-100'
                   }`}>
-                    <Trophy className={`h-4 w-4 ${t.is_current ? 'text-white' : 'text-slate-500'}`} />
+                    <Trophy className={`h-4 w-4 ${i === 0 ? 'text-white' : 'text-slate-500'}`} />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-slate-900">{t.name}</p>
-                      {t.is_current && (
-                        <Badge variant="accent" className="text-xs">Atual</Badge>
+                      {i === 0 && (
+                        <Badge variant="accent" className="text-xs">Mais Recente</Badge>
                       )}
                     </div>
                     <p className="text-xs text-slate-500 mt-0.5">

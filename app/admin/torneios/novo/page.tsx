@@ -158,16 +158,6 @@ export default function NovoTorneioPge() {
               </div>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.is_current}
-                onChange={(e) => set('is_current', e.target.checked)}
-                className="rounded border-slate-300"
-              />
-              <span className="text-sm font-medium">Definir como campeonato atual</span>
-            </label>
-
             <div className="flex gap-3 pt-2">
               <Button type="button" variant="outline" onClick={() => router.back()} disabled={loading} className="flex-1">
                 Cancelar

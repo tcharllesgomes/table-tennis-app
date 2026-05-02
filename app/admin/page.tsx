@@ -6,9 +6,9 @@ import { getStatusLabel } from '@/lib/utils'
 export default async function AdminDashboard() {
   const supabase = createClient()
 
-  const [{ data: currentTournament }, { count: athleteCount }, { count: tournamentCount }] =
+  const [{ data: recentTournament }, { count: athleteCount }, { count: tournamentCount }] =
     await Promise.all([
-      supabase.from('tournaments').select('*, group_matches(count), knockout_matches(count)').eq('is_current', true).single(),
+      supabase.from('tournaments').select('*, group_matches(count), knockout_matches(count)').order('created_at', { ascending: false }).limit(1).single(),
       supabase.from('athletes').select('*', { count: 'exact', head: true }),
       supabase.from('tournaments').select('*', { count: 'exact', head: true }),
     ])
@@ -37,47 +37,47 @@ export default async function AdminDashboard() {
         ))}
       </div>
 
-      {/* Campeonato atual */}
-      {currentTournament ? (
+      {/* Campeonato mais recente */}
+      {recentTournament ? (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-900">Campeonato Atual</h2>
+            <h2 className="font-semibold text-slate-900">Campeonato Mais Recente</h2>
             <Link
-              href={`/admin/torneios/${currentTournament.id}`}
+              href={`/admin/torneios/${recentTournament.id}`}
               className="text-sm text-navy-600 hover:underline flex items-center gap-1"
             >
               Gerenciar <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
-          <p className="text-lg font-bold text-navy-600 mb-1">{currentTournament.name}</p>
-          <p className="text-sm text-slate-500 mb-3">{currentTournament.edition}ª Edição</p>
+          <p className="text-lg font-bold text-navy-600 mb-1">{recentTournament.name}</p>
+          <p className="text-sm text-slate-500 mb-3">{recentTournament.edition}ª Edição</p>
 
           <div className="flex items-center gap-2">
-            {currentTournament.status === 'finished' ? (
+            {recentTournament.status === 'finished' ? (
               <CheckCircle2 className="h-4 w-4 text-green-600" />
             ) : (
               <Clock className="h-4 w-4 text-orange-500" />
             )}
-            <span className="text-sm font-medium">{getStatusLabel(currentTournament.status)}</span>
+            <span className="text-sm font-medium">{getStatusLabel(recentTournament.status)}</span>
           </div>
 
           <div className="grid grid-cols-3 gap-3 mt-4">
             <Link
-              href={`/torneio/${currentTournament.id}/grupos`}
+              href={`/torneio/${recentTournament.id}/grupos`}
               className="text-center p-3 bg-slate-50 rounded-lg hover:bg-navy-50 transition-colors"
             >
               <Users className="h-5 w-5 text-navy-600 mx-auto mb-1" />
               <span className="text-xs text-slate-600">Grupos</span>
             </Link>
             <Link
-              href={`/torneio/${currentTournament.id}`}
+              href={`/torneio/${recentTournament.id}`}
               className="text-center p-3 bg-slate-50 rounded-lg hover:bg-navy-50 transition-colors"
             >
               <Swords className="h-5 w-5 text-orange-500 mx-auto mb-1" />
               <span className="text-xs text-slate-600">Mata-Mata</span>
             </Link>
             <Link
-              href={`/admin/torneios/${currentTournament.id}`}
+              href={`/admin/torneios/${recentTournament.id}`}
               className="text-center p-3 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors"
             >
               <Trophy className="h-5 w-5 text-orange-500 mx-auto mb-1" />
@@ -88,7 +88,7 @@ export default async function AdminDashboard() {
       ) : (
         <div className="bg-slate-50 rounded-xl border border-dashed border-slate-300 p-8 text-center">
           <Trophy className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-600 font-medium mb-3">Nenhum campeonato ativo</p>
+          <p className="text-slate-600 font-medium mb-3">Nenhum campeonato criado</p>
           <Link
             href="/admin/torneios/novo"
             className="inline-flex items-center gap-2 bg-navy-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-navy-700 transition-colors"
