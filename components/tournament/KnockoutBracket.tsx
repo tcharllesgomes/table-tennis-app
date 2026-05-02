@@ -18,6 +18,11 @@ function getRoundSpacing(roundIndex: number): number {
   return Math.pow(2, roundIndex) * (CARD_HEIGHT + CARD_GAP) - CARD_GAP
 }
 
+function getCardTopOffset(roundIndex: number): number {
+  if (roundIndex === 0) return 0
+  return getCardTopOffset(roundIndex - 1) + (CARD_HEIGHT + getRoundSpacing(roundIndex - 1)) / 2
+}
+
 export function KnockoutBracket({ matches, onEditMatch }: KnockoutBracketProps) {
   const rounds = organizeBracketByRounds(matches)
   if (rounds.length === 0) return (
@@ -45,7 +50,7 @@ export function KnockoutBracket({ matches, onEditMatch }: KnockoutBracketProps) 
               {/* Matches */}
               <div
                 className="flex flex-col mx-2"
-                style={{ gap: `${getRoundSpacing(roundIndex)}px` }}
+                style={{ gap: `${getRoundSpacing(roundIndex)}px`, paddingTop: `${getCardTopOffset(roundIndex)}px` }}
               >
                 {round.matches.map((match) => (
                   <div key={match.id} style={{ height: CARD_HEIGHT }}>
@@ -81,6 +86,7 @@ function BracketConnector({
   roundIndex: number
 }) {
   const labelHeight = 38 // approx height of round label + mb-3
+  const cardTopOffset = getCardTopOffset(roundIndex)
   const groupSpacing = getRoundSpacing(roundIndex)
   const pairHeight = 2 * CARD_HEIGHT + groupSpacing
   const totalHeight = matchCount * CARD_HEIGHT + (matchCount - 1) * groupSpacing
@@ -91,12 +97,12 @@ function BracketConnector({
   return (
     <svg
       width={width}
-      height={totalHeight + labelHeight}
+      height={totalHeight + labelHeight + cardTopOffset}
       className="shrink-0"
       style={{ marginTop: 0 }}
     >
       {Array.from({ length: pairs }, (_, i) => {
-        const offsetY = labelHeight
+        const offsetY = labelHeight + cardTopOffset
         const y1 = offsetY + i * (pairHeight + groupSpacing) + CARD_HEIGHT / 2
         const y2 = offsetY + i * (pairHeight + groupSpacing) + CARD_HEIGHT + groupSpacing + CARD_HEIGHT / 2
         const ymid = (y1 + y2) / 2
