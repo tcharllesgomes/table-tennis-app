@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { ReactNode, useState } from 'react'
 import { TournamentCategory, Athlete, CategoryAthlete, GroupMatch, KnockoutMatch } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,7 +14,15 @@ import { ScoreModal } from '@/components/admin/ScoreModal'
 import { useToast } from '@/components/ui/use-toast'
 import { calculateGroupStandings, getGroupLabel, getBracketRankLabel } from '@/lib/utils'
 import { GroupConfigurator } from '@/components/admin/GroupConfigurator'
-import { Plus, Pencil, Trash2, UserPlus, Shuffle, ChevronDown, ChevronRight, Swords, Play } from 'lucide-react'
+import { Plus, Pencil, Trash2, UserPlus, Shuffle, ChevronDown, ChevronRight, Swords, Play, AlertTriangle } from 'lucide-react'
+
+type ConfirmState = {
+  title: string
+  description: ReactNode
+  confirmLabel?: string
+  destructive?: boolean
+  onConfirm: () => void | Promise<void>
+}
 
 interface CategoryPanelProps {
   tournamentId: string
@@ -45,6 +53,8 @@ export function CategoryPanel({
   const [selectedGroup, setSelectedGroup] = useState<Record<string, string>>({})
   const [scoreModal, setScoreModal] = useState<{ match: any; type: 'group' | 'knockout' } | null>(null)
   const [configuratorCat, setConfiguratorCat] = useState<string | null>(null)
+  const [confirmState, setConfirmState] = useState<ConfirmState | null>(null)
+  const [confirmLoading, setConfirmLoading] = useState(false)
 
   const isDraft = tournamentStatus === 'draft'
 
@@ -109,25 +119,133 @@ export function CategoryPanel({
     else { toast({ title: 'Categoria excluída', variant: 'success' }); onRefresh() }
   }
 
-  async function addAthlete(catId: string, groupCount: number) {
-    const athleteId = selectedAthlete[catId]
-    if (!athleteId) return
-    const group = selectedGroup[catId]
+  async function doAddAthlete(catId: string, athleteId: string, groupNumber: number | null) {
     const res = await fetch(`/api/admin/categories/${catId}/athletes`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ athlete_id: athleteId, group_number: group && group !== 'none' ? parseInt(group) : null }),
+      body: JSON.stringify({ athlete_id: athleteId, group_number: groupNumber }),
     })
     const d = await res.json()
     if (!res.ok) toast({ title: 'Erro', description: d.error, variant: 'destructive' })
     else { toast({ title: 'Atleta adicionado!', variant: 'success' }); setSelectedAthlete((p) => ({ ...p, [catId]: '' })); onRefresh() }
   }
 
-  async function removeAthlete(catId: string, athleteId: string) {
+  async function doRemoveAthlete(catId: string, athleteId: string) {
     const res = await fetch(`/api/admin/categories/${catId}/athletes/${athleteId}`, { method: 'DELETE' })
     const d = await res.json()
     if (!res.ok) toast({ title: 'Erro', description: d.error, variant: 'destructive' })
-    else onRefresh()
+    else { toast({ title: 'Atleta removido', variant: 'success' }); onRefresh() }
+  }
+
+  function askAddAthlete(
+    cat: TournamentCategory & {
+      athletes: (CategoryAthlete & { athlete: Athlete })[]
+      groupMatches: (GroupMatch & { athlete1: Athlete; athlete2: Athlete })[]
+    }
+  ) {
+    const athleteId = selectedAthlete[cat.id]
+    if (!athleteId) return
+    const groupStr = selectedGroup[cat.id]
+    const groupNumber = groupStr && groupStr !== 'none' ? parseInt(groupStr) : null
+    const groupsStarted = cat.groupMatches.length > 0
+
+    if (groupsStarted && groupNumber == null) {
+      toast({
+        title: 'Selecione um grupo',
+        description: 'Após o início da fase de grupos, é obrigatório escolher um grupo ao adicionar um atleta.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const athleteName = allAthletes.find((a) => a.id === athleteId)?.name ?? 'Atleta'
+    const groupLabel = groupNumber != null ? getGroupLabel(groupNumber) : null
+    const athletesInGroup = groupNumber != null
+      ? cat.athletes.filter((a) => a.group_number === groupNumber).length
+      : 0
+    const willExceedLimit = groupNumber != null && athletesInGroup >= cat.players_per_group
+
+    let description: ReactNode
+    if (!groupsStarted) {
+      description = (
+        <p>
+          {groupLabel
+            ? <>Adicionar <strong>{athleteName}</strong> ao <strong>Grupo {groupLabel}</strong> da categoria <strong>{cat.name}</strong>?</>
+            : <>Adicionar <strong>{athleteName}</strong> à categoria <strong>{cat.name}</strong> sem grupo?</>
+          }
+        </p>
+      )
+    } else {
+      description = (
+        <div className="space-y-2">
+          <p>
+            <strong>{athleteName}</strong> será adicionado ao <strong>Grupo {groupLabel}</strong> da categoria <strong>{cat.name}</strong>.
+          </p>
+          {athletesInGroup > 0 && (
+            <p>
+              Serão criadas automaticamente <strong>{athletesInGroup} partida{athletesInGroup !== 1 ? 's' : ''} pendente{athletesInGroup !== 1 ? 's' : ''}</strong> contra os demais atletas do grupo.
+            </p>
+          )}
+          {willExceedLimit && (
+            <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-amber-800">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <p className="text-xs">
+                O grupo ficará com <strong>{athletesInGroup + 1} atletas</strong>, acima do limite definido para esta categoria ({cat.players_per_group}).
+              </p>
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    setConfirmState({
+      title: 'Adicionar atleta',
+      description,
+      confirmLabel: 'Adicionar',
+      onConfirm: () => doAddAthlete(cat.id, athleteId, groupNumber),
+    })
+  }
+
+  function askRemoveAthlete(
+    cat: TournamentCategory & {
+      athletes: (CategoryAthlete & { athlete: Athlete })[]
+      groupMatches: (GroupMatch & { athlete1: Athlete; athlete2: Athlete })[]
+    },
+    ca: CategoryAthlete & { athlete: Athlete }
+  ) {
+    const athleteMatches = cat.groupMatches.filter(
+      (m) => m.athlete1_id === ca.athlete_id || m.athlete2_id === ca.athlete_id
+    )
+    const matchCount = athleteMatches.length
+    const finishedCount = athleteMatches.filter((m) => m.status === 'finished').length
+
+    const description = (
+      <div className="space-y-2">
+        <p>
+          <strong>{ca.athlete.name}</strong> será removido da categoria <strong>{cat.name}</strong>.
+        </p>
+        {matchCount > 0 && (
+          <div className="flex gap-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-red-800">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="text-xs space-y-1">
+              <p>
+                <strong>{matchCount} partida{matchCount !== 1 ? 's' : ''}</strong> deste atleta no grupo {finishedCount > 0 && <>(incluindo <strong>{finishedCount} já finalizada{finishedCount !== 1 ? 's' : ''}</strong>) </>}
+                {matchCount !== 1 ? 'serão apagadas' : 'será apagada'}.
+              </p>
+              <p>A classificação do grupo será recalculada automaticamente.</p>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+
+    setConfirmState({
+      title: 'Excluir atleta',
+      description,
+      confirmLabel: 'Excluir',
+      destructive: true,
+      onConfirm: () => doRemoveAthlete(cat.id, ca.athlete_id),
+    })
   }
 
   async function updateGroup(catId: string, athleteId: string, group: string) {
@@ -235,21 +353,23 @@ export function CategoryPanel({
                 )}
 
                 {/* Adicionar atleta */}
-                {catNotStarted && (
+                {!catHasKnockout && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1.5"><UserPlus className="h-3.5 w-3.5" /> Atletas</p>
-                      <Button
-                        size="sm"
-                        variant="accent"
-                        onClick={() => {
-                          if (cat.athletes.length === 0) { toast({ title: 'Nenhum atleta', variant: 'destructive' }); return }
-                          setConfiguratorCat(cat.id)
-                        }}
-                        className="h-7 text-xs"
-                      >
-                        <Shuffle className="h-3.5 w-3.5 mr-1" /> Sortear
-                      </Button>
+                      {catNotStarted && (
+                        <Button
+                          size="sm"
+                          variant="accent"
+                          onClick={() => {
+                            if (cat.athletes.length === 0) { toast({ title: 'Nenhum atleta', variant: 'destructive' }); return }
+                            setConfiguratorCat(cat.id)
+                          }}
+                          className="h-7 text-xs"
+                        >
+                          <Shuffle className="h-3.5 w-3.5 mr-1" /> Sortear
+                        </Button>
+                      )}
                     </div>
                     <div className="flex gap-2 flex-wrap">
                       <Select value={selectedAthlete[cat.id] ?? ''} onValueChange={(v) => setSelectedAthlete((p) => ({ ...p, [cat.id]: v }))}>
@@ -260,19 +380,27 @@ export function CategoryPanel({
                           {available.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Select value={selectedGroup[cat.id] ?? 'none'} onValueChange={(v) => setSelectedGroup((p) => ({ ...p, [cat.id]: v }))}>
+                      <Select
+                        value={selectedGroup[cat.id] ?? (catNotStarted ? 'none' : '')}
+                        onValueChange={(v) => setSelectedGroup((p) => ({ ...p, [cat.id]: v }))}
+                      >
                         <SelectTrigger className="w-32 h-8 text-sm">
                           <SelectValue placeholder="Grupo" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Sem grupo</SelectItem>
+                          {catNotStarted && <SelectItem value="none">Sem grupo</SelectItem>}
                           {groupNumbers.map((g) => <SelectItem key={g} value={g.toString()}>Grupo {getGroupLabel(g)}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Button size="sm" className="h-8" disabled={!selectedAthlete[cat.id]} onClick={() => addAthlete(cat.id, cat.groups_count)}>
+                      <Button size="sm" className="h-8" disabled={!selectedAthlete[cat.id]} onClick={() => askAddAthlete(cat)}>
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
+                    {!catNotStarted && (
+                      <p className="text-xs text-slate-500">
+                        A fase de grupos já foi iniciada — partidas serão criadas automaticamente para o atleta adicionado.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -290,16 +418,16 @@ export function CategoryPanel({
                             <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700">{ca.athlete.name.slice(0, 2).toUpperCase()}</div>
                             <span className="text-sm flex-1 truncate">{ca.athlete.name}</span>
                             {catNotStarted && (
-                              <>
-                                <Select value="none" onValueChange={(v) => updateGroup(cat.id, ca.athlete_id, v)}>
-                                  <SelectTrigger className="w-28 h-6 text-xs"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Sem grupo</SelectItem>
-                                    {groupNumbers.map((g) => <SelectItem key={g} value={g.toString()}>Grupo {getGroupLabel(g)}</SelectItem>)}
-                                  </SelectContent>
-                                </Select>
-                                <button onClick={() => removeAthlete(cat.id, ca.athlete_id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
-                              </>
+                              <Select value="none" onValueChange={(v) => updateGroup(cat.id, ca.athlete_id, v)}>
+                                <SelectTrigger className="w-28 h-6 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Sem grupo</SelectItem>
+                                  {groupNumbers.map((g) => <SelectItem key={g} value={g.toString()}>Grupo {getGroupLabel(g)}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            )}
+                            {!catHasKnockout && (
+                              <button onClick={() => askRemoveAthlete(cat, ca)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                             )}
                           </div>
                         ))}
@@ -320,16 +448,16 @@ export function CategoryPanel({
                               <div className="h-6 w-6 rounded-full bg-navy-100 flex items-center justify-center text-xs font-bold text-navy-600">{ca.athlete.name.slice(0, 2).toUpperCase()}</div>
                               <span className="text-sm flex-1 truncate">{ca.athlete.name}</span>
                               {catNotStarted && (
-                                <>
-                                  <Select value={g.toString()} onValueChange={(v) => updateGroup(cat.id, ca.athlete_id, v)}>
-                                    <SelectTrigger className="w-28 h-6 text-xs"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">Sem grupo</SelectItem>
-                                      {groupNumbers.map((n) => <SelectItem key={n} value={n.toString()}>Grupo {getGroupLabel(n)}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                  <button onClick={() => removeAthlete(cat.id, ca.athlete_id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
-                                </>
+                                <Select value={g.toString()} onValueChange={(v) => updateGroup(cat.id, ca.athlete_id, v)}>
+                                  <SelectTrigger className="w-28 h-6 text-xs"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Sem grupo</SelectItem>
+                                    {groupNumbers.map((n) => <SelectItem key={n} value={n.toString()}>Grupo {getGroupLabel(n)}</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                              {!catHasKnockout && (
+                                <button onClick={() => askRemoveAthlete(cat, ca)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                               )}
                             </div>
                           ))}
@@ -443,6 +571,43 @@ export function CategoryPanel({
           />
         ) : null
       )}
+
+      <Dialog
+        open={!!confirmState}
+        onOpenChange={(open) => { if (!open && !confirmLoading) setConfirmState(null) }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmState?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-slate-600">{confirmState?.description}</div>
+          <div className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmState(null)}
+              disabled={confirmLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant={confirmState?.destructive ? 'destructive' : 'default'}
+              disabled={confirmLoading}
+              onClick={async () => {
+                if (!confirmState) return
+                setConfirmLoading(true)
+                try {
+                  await confirmState.onConfirm()
+                } finally {
+                  setConfirmLoading(false)
+                  setConfirmState(null)
+                }
+              }}
+            >
+              {confirmState?.confirmLabel ?? 'Confirmar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
